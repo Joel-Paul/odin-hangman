@@ -1,74 +1,127 @@
 require 'set'
 
 
-class Hangman
-  @@comands = {
-    help: 'Displays the list of commands',
-    save: 'Saves the current game and quits to the main menu',
-    quit: 'Quits the current game to the main menu'
+# def load_game_menu
+#   saves = Dir.exist?(:saves) ? Dir.entries(:saves) - ['..', '.'] : []
+#   if saves.empty?
+#     puts 'No saves found, returning to main menu...'
+#     return main_menu
+#   end
+
+#   saves.each_with_index do |val, index|
+#     puts "#{index+1}. #{val}"
+#   end
+# end
+
+
+def display_options(options)
+  puts 'Options:'
+  for k, v in options
+    puts "  #{k.name.ljust 10} - #{v}"
+  end
+end
+
+
+def option_valid?(options, choice)
+  options.keys.map { |k| k.name }.include? choice
+end
+
+
+class HangmanManager
+  @@main_menu_options = {
+    new: 'Start a new game',
+    load: 'Load a previous game',
+    quit: 'Closes program'
   }
+
+
+  def initialize
+    puts
+    puts 'Welcome to Hangman!'
+    
+    while true
+      case main_menu
+      when :new
+        Hangman.new
+      when :load
+        puts 'No saves found, returning to main menu...'
+      when :quit
+        puts 'Thanks for playing!'
+        break
+      end
+    end
+
+  end
+
+
+  def main_menu
+    puts
+    display_options @@main_menu_options
+
+    print 'Pick an option: '
+    choice = gets.chomp
+    until option_valid?(@@main_menu_options, choice)
+      print 'Invalid choice! Try again: '
+      choice = gets.chomp
+    end
+    choice.to_sym
+  end
+end
+
+
+class Hangman
+  @@commands = {
+    save: 'Save and quit the current game',
+    quit: 'Return to main menu without saving'
+  }
+
 
   def initialize(min_len=5, max_len=12, max_wrong=8)
     @min_len = min_len
     @max_len = max_len
     @max_wrong = max_wrong
 
-    @secret = ''
-    @guessed = Set.new
-  end
-
-
-  def main_menu
-    puts ''
-    puts 'Welcome to Hangman!'
-    puts '1. New game'
-    puts '2. Load game'
-    puts '3. Quit'
-
-    print 'Chose an option: '
-    choice = gets.chomp
-    until choice_valid?(choice, 3)
-      print 'Choice must be between 1 and 3: '
-      choice = gets.chomp
-    end
-
-    puts
-    case choice
-    when '1'
-      new_game
-    when '2'
-      load_game_menu
-    end
-  end
-
-
-  def new_game
     @secret = rand_word
-    puts 'Let\'s play Hangman!'
+    @guessed = Set.new
     
-    if game_loop?
-      # Prematurely exit the game
-    else
-      display_results
-    end
-    main_menu
-  end
-
-
-  def load_game_menu
-    saves = Dir.exist?(:saves) ? Dir.entries(:saves) - ['..', '.'] : []
-    if saves.empty?
-      puts 'No saves found, returning to main menu...'
-      return main_menu
-    end
-
-    saves.each_with_index do |val, index|
-      puts "#{index+1}. #{val}"
+    case play
+    when :save
+    when :quit
+      puts 'Returning to main menu...'
+    when :won
+      puts 'You wins! :D'
+    when :lost
+      puts 'You loses :('
+      puts "The word was `#{@secret}`"
     end
   end
 
 
-  private
+  def play
+    puts
+    puts "Let\'s play Hangman!"
+    display_options @@commands
+    display_game
+
+    while game_status == :ongoing
+      print 'Guess a letter: '
+      input = gets.chomp
+      
+      until input_valid?(input)
+        print 'Invalid input! Try again: '
+        input = gets.chomp
+      end
+
+      if guess_valid? input
+        @guessed << input.downcase
+        display_game
+      elsif option_valid?(@@commands, input)
+        return input.to_sym
+      end
+    end
+
+    return game_status
+  end
 
 
   def rand_word
@@ -95,23 +148,8 @@ class Hangman
   end
 
 
-  def display_results
-    if @secret.chars.all?{ |c| @guessed.include? c}
-      puts 'You wins! :D'
-    else
-      puts 'You loses :('
-      puts "The word was `#{@secret}`"
-    end
-  end
-
-
   def input_valid?(input)
-    guess_valid?(input) or command_valid?(input)
-  end
-
-
-  def command_valid?(command)
-    @@comands.keys.map { |k| k.name }.include? command
+    guess_valid?(input) or option_valid?(@@commands, input)
   end
 
   
@@ -120,84 +158,23 @@ class Hangman
   end
 
 
-  def choice_valid?(input, max_index)
-    int = Integer(input) rescue -1
-    int.between?(1, max_index)
-  end
-
-
-  # Returns true if we quit the game before it ended
-  def game_loop?
-    display_commands
-    display_game
-
-    until game_over?
-      print 'Guess a letter: '
-      input = gets.chomp
-      
-      until input_valid?(input)
-        puts 'Invalid letter!'
-        display_game
-    
-        print 'Guess a letter: '
-        input = gets.chomp
-      end
-
-      if guess_valid? input
-        @guessed << input.downcase
-      elsif command_valid? input
-        return true if execute_command? input
-      end
-      display_game
-    end
-    false
-  end
-
-
   def display_game
-    puts ''
+    puts
     display_guess
     display_incorrect
   end
 
 
-  def display_commands
-    puts ''
-    puts 'Commands:'
-    for k, v in @@comands
-      puts "   #{k} - #{v}"
+  def game_status
+    if @secret.chars.all?{ |c| @guessed.include? c}
+      :won
+    elsif get_incorrect.length == @max_wrong
+      :lost
+    else
+      :ongoing
     end
-  end
-
-
-  # Returns true when we want to quit the current game
-  def execute_command?(input)
-    case input
-    when 'help'
-      display_commands
-    when 'save'
-      return true
-    when 'quit'
-      return true
-    end
-    false
-  end
-
-
-  def game_over?
-    incorrect = get_incorrect
-    @secret.chars.all?{ |c| @guessed.include? c} or incorrect.length == @max_wrong
-  end
-
-
-  def save_game
-  end
-
-
-  def load_game
   end
 end
 
 
-hangman = Hangman.new
-hangman.main_menu
+HangmanManager.new
