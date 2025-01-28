@@ -1,19 +1,6 @@
 require 'set'
 
 
-# def load_game_menu
-#   saves = Dir.exist?(:saves) ? Dir.entries(:saves) - ['..', '.'] : []
-#   if saves.empty?
-#     puts 'No saves found, returning to main menu...'
-#     return main_menu
-#   end
-
-#   saves.each_with_index do |val, index|
-#     puts "#{index+1}. #{val}"
-#   end
-# end
-
-
 def display_options(options)
   puts 'Options:'
   for k, v in options
@@ -28,6 +15,8 @@ end
 
 
 class HangmanManager
+  SAVE_DIR = 'saves'
+
   @@main_menu_options = {
     new: 'Start a new game',
     load: 'Load a previous game',
@@ -42,9 +31,9 @@ class HangmanManager
     while true
       case main_menu
       when :new
-        Hangman.new
+        new_game
       when :load
-        puts 'No saves found, returning to main menu...'
+        load_game_menu
       when :quit
         puts 'Thanks for playing!'
         break
@@ -66,6 +55,46 @@ class HangmanManager
     end
     choice.to_sym
   end
+
+
+  def new_game
+    h = Hangman.new
+    case h.play
+    when :save
+      puts 'Saving and quitting to main menu...'
+      Dir.mkdir SAVE_DIR unless Dir.exist? SAVE_DIR
+      File.open("#{SAVE_DIR}/test.hm", 'w') { |f| f.write(Marshal::dump(h)) }
+    when :quit
+      puts 'Returning to main menu...'
+    when :won
+      puts 'You wins! :D'
+    when :lost
+      puts 'You loses :('
+      puts "The word was `#{h.secret}`"
+    end
+  end
+
+
+  def load_game_menu
+    puts
+    saves = Dir.exist?(SAVE_DIR) ? Dir["#{SAVE_DIR}/*.hm"] : []
+    if saves.empty?
+      puts 'No saves found, returning to main menu...'
+      return
+    end
+  
+    puts "#{'Index'.ljust 5} | #{'Filename'.ljust 16} | #{'Last Modified'.ljust 16}"
+    saves.each_with_index do |val, index|
+      filename = File.basename val
+      time = File.mtime val
+      puts "#{(index+1).to_s.ljust 5} | #{filename.ljust 16} | #{time.to_s.ljust 16}"
+    end
+
+    puts
+    print 'Select which save to load: '
+    input = gets
+    print input.chomp
+  end
 end
 
 
@@ -83,17 +112,6 @@ class Hangman
 
     @secret = rand_word
     @guessed = Set.new
-    
-    case play
-    when :save
-    when :quit
-      puts 'Returning to main menu...'
-    when :won
-      puts 'You wins! :D'
-    when :lost
-      puts 'You loses :('
-      puts "The word was `#{@secret}`"
-    end
   end
 
 
@@ -121,6 +139,10 @@ class Hangman
     end
 
     return game_status
+  end
+
+
+  def save
   end
 
 
