@@ -1,5 +1,5 @@
 require 'set'
-
+require_relative 'is_integer'
 
 def display_options(options)
   puts 'Options:'
@@ -63,7 +63,7 @@ class HangmanManager
     when :save
       puts 'Saving and quitting to main menu...'
       Dir.mkdir SAVE_DIR unless Dir.exist? SAVE_DIR
-      File.open("#{SAVE_DIR}/test.hm", 'w') { |f| f.write(Marshal::dump(h)) }
+      File.open("#{SAVE_DIR}/#{Time.now.to_i}.hm", 'wb') { |f| f.write(Marshal::dump(h)) }
     when :quit
       puts 'Returning to main menu...'
     when :won
@@ -82,18 +82,44 @@ class HangmanManager
       puts 'No saves found, returning to main menu...'
       return
     end
+
+    titles = ['Index', 'Progress', 'Last Played']
+    progress_list = []
+    last_played_list = []
   
-    puts "#{'Index'.ljust 5} | #{'Filename'.ljust 16} | #{'Last Modified'.ljust 16}"
-    saves.each_with_index do |val, index|
-      filename = File.basename val
-      time = File.mtime val
-      puts "#{(index+1).to_s.ljust 5} | #{filename.ljust 16} | #{time.to_s.ljust 16}"
+    saves.each_with_index do |path, index|
+      game = Marshal.load(File.read(path))
+      
+      progress_list << game.get_guesssed
+      last_played_list << File.mtime(path).to_s
     end
 
-    puts
-    print 'Select which save to load: '
-    input = gets
-    print input.chomp
+    lengths = [
+      titles[0].length,
+      ([titles[1]] + progress_list).max_by(&:length).length,
+      ([titles[2]] + last_played_list).max_by(&:length).length
+    ]
+
+    title = (0...titles.length).map { |i| titles[i].ljust(lengths[i])}.join ' | '
+    puts title
+    puts '-' * title.length
+
+    saves.each_with_index do |save, index|
+      rows = [
+        (index + 1).to_s.ljust(lengths[0]),
+        progress_list[index].ljust(lengths[1]),
+        last_played_list[index].ljust(lengths[2])
+      ]
+      puts rows.join ' | '
+    end
+
+    # puts
+    # print 'Select which save to load: '
+    # input = gets.chomp
+    # until input.is_integer? and input.to_i.between?(1, saves.length)
+    #   print 'Try again: '
+    #   input = gets.chomp
+    # end
   end
 end
 
@@ -142,10 +168,6 @@ class Hangman
   end
 
 
-  def save
-  end
-
-
   def rand_word
     words = File.readlines('google-10000-english-no-swears.txt').map { |word| word.chomp }.select do |word|
       word.length >= @min_len and word.length <= @max_len
@@ -159,8 +181,8 @@ class Hangman
   end
   
 
-  def display_guess
-    puts @secret.chars.map { |c| @guessed.include?(c) ? c : '_' }.join(' ')
+  def get_guesssed
+    @secret.chars.map { |c| @guessed.include?(c) ? c : '_' }.join(' ')
   end
 
 
@@ -182,7 +204,7 @@ class Hangman
 
   def display_game
     puts
-    display_guess
+    puts get_guesssed
     display_incorrect
   end
 
