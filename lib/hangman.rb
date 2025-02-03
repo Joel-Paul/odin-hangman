@@ -31,9 +31,12 @@ class HangmanManager
     while true
       case main_menu
       when :new
-        new_game
+        play
       when :load
-        load_game_menu
+        hm = load_game_menu
+        unless hm == :cancel
+          play hm
+        end
       when :quit
         puts 'Thanks for playing!'
         break
@@ -57,20 +60,25 @@ class HangmanManager
   end
 
 
-  def new_game
-    h = Hangman.new
-    case h.play
+  def play(save_name=nil)
+    hm = save_name.nil? ? Hangman.new : Marshal.load(File.read(save_name))
+
+    case hm.play
     when :save
       puts 'Saving and quitting to main menu...'
       Dir.mkdir SAVE_DIR unless Dir.exist? SAVE_DIR
-      File.open("#{SAVE_DIR}/#{Time.now.to_i}.hm", 'wb') { |f| f.write(Marshal::dump(h)) }
+      save_name = "#{SAVE_DIR}/#{Time.now.to_i}.hm" if save_name.nil?
+
+      File.open(save_name, 'wb') { |f| f.write(Marshal::dump(hm)) }
     when :quit
       puts 'Returning to main menu...'
     when :won
       puts 'You wins! :D'
+      File.delete save_name if not save_name.nil? and File.exist? save_name
     when :lost
       puts 'You loses :('
-      puts "The word was `#{h.secret}`"
+      puts "The word was `#{hm.secret}`"
+      File.delete save_name if not save_name.nil? and File.exist? save_name
     end
   end
 
@@ -80,7 +88,7 @@ class HangmanManager
     saves = Dir.exist?(SAVE_DIR) ? Dir["#{SAVE_DIR}/*.hm"] : []
     if saves.empty?
       puts 'No saves found, returning to main menu...'
-      return
+      return :cancel
     end
 
     titles = ['Index', 'Progress', 'Last Played']
@@ -113,18 +121,25 @@ class HangmanManager
       puts rows.join ' | '
     end
 
-    # puts
-    # print 'Select which save to load: '
-    # input = gets.chomp
-    # until input.is_integer? and input.to_i.between?(1, saves.length)
-    #   print 'Try again: '
-    #   input = gets.chomp
-    # end
+    puts
+    print 'Select which save to load or type cancel to return to the main menu: '
+    input = gets.chomp
+    until input == 'cancel' or (input.is_integer? and input.to_i.between?(1, saves.length))
+      print 'Try again: '
+      input = gets.chomp
+    end
+
+    unless input == 'cancel'
+      return saves[input.to_i - 1]
+    end
+    :cancel
   end
 end
 
 
 class Hangman
+  attr_reader :secret
+
   @@commands = {
     save: 'Save and quit the current game',
     quit: 'Return to main menu without saving'
